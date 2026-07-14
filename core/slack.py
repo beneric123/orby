@@ -3,20 +3,20 @@
 import json
 from urllib.request import Request, urlopen
 
-SLACK_MSG_LIMIT = 3800  # matches formatter.SLACK_MSG_LIMIT
+from formatter import SLACK_MSG_LIMIT
 
 
 def slack_api(method: str, payload: dict, bot_token: str, timeout: int = 4) -> dict:
     """POST to https://slack.com/api/{method}. Never raises."""
-    req = Request(
-        f"https://slack.com/api/{method}",
-        data=json.dumps(payload).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {bot_token}",
-        },
-    )
     try:
+        req = Request(
+            f"https://slack.com/api/{method}",
+            data=json.dumps(payload).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {bot_token}",
+            },
+        )
         return json.loads(urlopen(req, timeout=timeout).read().decode())
     except Exception as e:
         return {"ok": False, "error": str(e)}

@@ -41,6 +41,11 @@ def test_slack_api_error_returns_not_ok(monkeypatch):
     assert "boom" in resp["error"]
 
 
+def test_slack_api_unserializable_payload_returns_not_ok():
+    resp = slack.slack_api("chat.postMessage", {"bad": object()}, "xoxb-test")
+    assert resp["ok"] is False
+
+
 def test_post_message_threads_and_truncates(monkeypatch):
     captured = {}
     _capture(monkeypatch, captured)
