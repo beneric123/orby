@@ -5,10 +5,10 @@ from core.watchlist import Watchlist
 
 
 def _setup(monkeypatch, tmp_path, *, watched=False):
-    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "sid-123")
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "sid-123456789")
     wl = Watchlist(tmp_path / "watch.json")
     if watched:
-        wl.set("sid-123", {"dm_channel": "D1", "thread_ts": "1.2"})
+        wl.set("sid-123456789", {"dm_channel": "D1", "thread_ts": "1.2"})
     monkeypatch.setattr(watch, "Watchlist", lambda: Watchlist(tmp_path / "watch.json"))
     monkeypatch.setattr(watch, "load_config", lambda: {
         "slack_bot_token": "xoxb-test",
@@ -27,7 +27,7 @@ def test_enroll_creates_entry_and_posts_root(monkeypatch, tmp_path, capsys):
 
     watch.enroll("my-label")
 
-    entry = Watchlist(path).get("sid-123")
+    entry = Watchlist(path).get("sid-123456789")
     assert entry["dm_channel"] == "D1"
     assert entry["thread_ts"] == "9.9"
     assert entry["label"] == "my-label"
@@ -39,8 +39,8 @@ def test_enroll_creates_entry_and_posts_root(monkeypatch, tmp_path, capsys):
     assert thread_ts is None  # root message, not threaded
     assert (tmp_path / "status").is_dir()
     out = capsys.readouterr().out
-    assert "sid-123" in out  # FULL session id
-    assert str(tmp_path / "status" / "sid-123.json") in out  # sentinel path
+    assert "sid-123456789" in out  # FULL session id
+    assert str(tmp_path / "status" / "sid-123456789.json") in out  # sentinel path
 
 
 def test_enroll_twice_is_noop(monkeypatch, tmp_path, capsys):
@@ -59,7 +59,7 @@ def test_unwatch_removes_and_posts(monkeypatch, tmp_path):
 
     watch.unwatch()
 
-    assert Watchlist(path).get("sid-123") is None
+    assert Watchlist(path).get("sid-123456789") is None
     assert calls == [("D1", "🛑 Stopped watching", "1.2")]
 
 
@@ -70,7 +70,7 @@ def test_unwatch_removes_even_when_slack_fails(monkeypatch, tmp_path, capsys):
 
     watch.unwatch()
 
-    assert Watchlist(path).get("sid-123") is None  # removal proceeds
+    assert Watchlist(path).get("sid-123456789") is None  # removal proceeds
     out = capsys.readouterr().out
     assert "WARNING" in out
     assert "channel_not_found" in out
