@@ -85,7 +85,8 @@ The agent abstraction (`core/agent.py`) is designed for extension. New agents im
 
 The opposite of attach mode: instead of pulling a session into a Slack thread,
 a session pushes to you. Run `/watch [label]` inside any Claude Code session
-before stepping away — Orby opens a DM thread (`👀 Watching <repo> @ <branch>`)
+before stepping away — Orby opens a DM thread titled with your label, else the
+session's `/rename` name, else `<repo> @ <branch>`
 and replies to it whenever the session stops (`✅ PR ready`, `📋 Findings`,
 `📋 Done`), needs input (`⏸️`), or ends (`🏁`). Run `/unwatch` when you're back.
 

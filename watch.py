@@ -13,6 +13,7 @@ records the mapping in ~/.orby/watch.json for hooks/notify.py to use.
 """
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -24,6 +25,8 @@ sys.path.insert(0, str(ORBY_ROOT))
 from config import load_config
 from core.slack import post_message, slack_api
 from core.watchlist import Watchlist
+
+CLAUDE_PROJECTS_DIR = Path.home() / ".claude" / "projects"
 
 
 def _session_id() -> str:
@@ -50,6 +53,23 @@ def _git_info(cwd: str) -> tuple[str | None, str | None]:
     return repo, branch
 
 
+def _session_title(session_id: str) -> str | None:
+    """Session name set via /rename — the last custom-title entry in the session transcript."""
+    for path in CLAUDE_PROJECTS_DIR.glob(f"*/{session_id}.jsonl"):
+        title = None
+        try:
+            for line in path.read_text().splitlines():
+                if '"customTitle"' in line:
+                    try:
+                        title = json.loads(line).get("customTitle") or title
+                    except json.JSONDecodeError:
+                        continue
+        except OSError:
+            return None
+        return title
+    return None
+
+
 def enroll(label: str | None):
     sid = _session_id()
     wl = Watchlist()
@@ -70,8 +90,13 @@ def enroll(label: str | None):
 
     cwd = os.getcwd()
     repo, branch = _git_info(cwd)
-    target = f"*{repo}* @ `{branch}`" if repo and branch else f"`{cwd}`"
-    text = f"👀 Watching {target}" + (f" — {label}" if label else "")
+    name = label or _session_title(sid)  # explicit label wins, else the /rename session name
+    where = f"{repo} @ `{branch}`" if repo and branch else f"`{cwd}`"
+    if name:
+        target = f"*{name}* — {where}"
+    else:
+        target = f"*{repo}* @ `{branch}`" if repo and branch else f"`{cwd}`"
+    text = f"👀 Watching {target}"
     resp = post_message(token, channel, text)
     if not resp.get("ok"):
         sys.exit(f"ERROR: chat.postMessage failed: {resp.get('error')}")
@@ -80,6 +105,7 @@ def enroll(label: str | None):
     status_dir.mkdir(exist_ok=True)
     wl.set(sid, {
         "label": label,
+        "session_name": name,
         "repo": repo,
         "branch": branch,
         "cwd": cwd,
@@ -116,7 +142,7 @@ def list_watches():
         return
     for sid, e in wl.entries.items():
         where = e.get("repo") or e.get("cwd") or "?"
-        print(f"{sid[:8]}  {where} @ {e.get('branch') or '-'}  {e.get('label') or ''}")
+        print(f"{sid[:8]}  {where} @ {e.get('branch') or '-'}  {e.get('label') or e.get('session_name') or ''}")
 
 
 def main():
