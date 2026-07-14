@@ -25,6 +25,7 @@ def load_config() -> dict:
         "slack_app_token": os.environ["SLACK_APP_TOKEN"],
         "default_cwd": os.environ.get("ORBY_DEFAULT_CWD", str(Path.home())),
         "permission_mode": os.environ.get("ORBY_PERMISSION_MODE", "acceptEdits"),
+        "notify_user": os.environ.get("ORBY_NOTIFY_USER"),
         "max_turns": int(os.environ.get("ORBY_MAX_TURNS", "50")),
         "allowed_tools": os.environ.get(
             "ORBY_ALLOWED_TOOLS", "Read,Write,Edit,Bash,Grep,Glob"
