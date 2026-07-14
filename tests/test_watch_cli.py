@@ -17,7 +17,7 @@ def _setup(monkeypatch, tmp_path, *, watched=False):
     return tmp_path / "watch.json"
 
 
-def test_enroll_creates_entry_and_posts_root(monkeypatch, tmp_path):
+def test_enroll_creates_entry_and_posts_root(monkeypatch, tmp_path, capsys):
     calls = []
     monkeypatch.setattr(watch, "slack_api", lambda m, p, t: (
         calls.append(("api", m, p)) or {"ok": True, "channel": {"id": "D1"}}))
@@ -38,6 +38,9 @@ def test_enroll_creates_entry_and_posts_root(monkeypatch, tmp_path):
     assert "my-label" in text
     assert thread_ts is None  # root message, not threaded
     assert (tmp_path / "status").is_dir()
+    out = capsys.readouterr().out
+    assert "sid-123" in out  # FULL session id
+    assert str(tmp_path / "status" / "sid-123.json") in out  # sentinel path
 
 
 def test_enroll_twice_is_noop(monkeypatch, tmp_path, capsys):
@@ -58,6 +61,19 @@ def test_unwatch_removes_and_posts(monkeypatch, tmp_path):
 
     assert Watchlist(path).get("sid-123") is None
     assert calls == [("D1", "🛑 Stopped watching", "1.2")]
+
+
+def test_unwatch_removes_even_when_slack_fails(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(watch, "post_message", lambda t, c, text, thread_ts=None: (
+        {"ok": False, "error": "channel_not_found"}))
+    path = _setup(monkeypatch, tmp_path, watched=True)
+
+    watch.unwatch()
+
+    assert Watchlist(path).get("sid-123") is None  # removal proceeds
+    out = capsys.readouterr().out
+    assert "WARNING" in out
+    assert "channel_not_found" in out
 
 
 def test_enroll_without_session_id_exits(monkeypatch, tmp_path):

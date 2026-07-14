@@ -101,8 +101,10 @@ def unwatch():
         print("This session is not being watched.")
         return
     cfg = load_config()
-    post_message(cfg["slack_bot_token"], entry["dm_channel"],
-                 "🛑 Stopped watching", thread_ts=entry["thread_ts"])
+    resp = post_message(cfg["slack_bot_token"], entry["dm_channel"],
+                        "🛑 Stopped watching", thread_ts=entry["thread_ts"])
+    if not resp.get("ok"):
+        print(f"WARNING: could not post to Slack thread: {resp.get('error')}")
     wl.remove(sid)
     print(f"Stopped watching session {sid[:8]}.")
 
