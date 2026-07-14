@@ -51,10 +51,15 @@ def _tail(text: str, limit: int) -> str:
 def classify_stop(session_id: str, last_message: str | None, status_dir: Path | None = None) -> str:
     """Build the Slack reply text for a Stop event."""
     sentinel = consume_sentinel(session_id, status_dir)
-    if sentinel:
-        header = CATEGORY_HEADERS.get(sentinel.get("category"), CATEGORY_HEADERS["done"])
-        link = (sentinel.get("link") or "").strip()
-        summary = (sentinel.get("summary") or "").strip()
+    if sentinel:  # content-free sentinels ({}) intentionally fall through to the heuristic
+        def _field(key: str) -> str:
+            val = sentinel.get(key)
+            return val.strip() if isinstance(val, str) else ""
+
+        category = sentinel.get("category")
+        header = (CATEGORY_HEADERS.get(category) if isinstance(category, str) else None) or CATEGORY_HEADERS["done"]
+        link = _field("link")
+        summary = _field("summary")
         text = header + (f" — {link}" if link else "")
         return text + (f"\n{summary}" if summary else "")
 

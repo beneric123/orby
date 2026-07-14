@@ -74,3 +74,15 @@ def test_classify_heuristic_long_message_tail_truncated(tmp_path):
 
 def test_classify_no_message(tmp_path):
     assert "no summary" in classify_stop("s1", None, tmp_path)
+
+
+def test_classify_empty_sentinel_falls_back_to_heuristic(tmp_path):
+    _write_sentinel(tmp_path, "s1", {})
+    msg = classify_stop("s1", "Investigation finished.", tmp_path)
+    assert msg == "📋 *Done*\nInvestigation finished."
+    assert not (tmp_path / "s1.json").exists()  # still consumed
+
+
+def test_classify_sentinel_non_string_fields_degrade_gracefully(tmp_path):
+    _write_sentinel(tmp_path, "s1", {"category": ["x"], "summary": 123, "link": {"a": 1}})
+    assert classify_stop("s1", None, tmp_path) == "📋 *Done*"
