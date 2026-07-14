@@ -81,6 +81,20 @@ The agent abstraction (`core/agent.py`) is designed for extension. New agents im
 | `reject` / `n` | Reject a pending permission prompt (attach mode). |
 | `interrupt` / `stop` | Send Ctrl+C to interrupt Claude (attach mode). |
 
+## Watch Mode (push notifications)
+
+The opposite of attach mode: instead of pulling a session into a Slack thread,
+a session pushes to you. Run `/watch [label]` inside any Claude Code session
+before stepping away — Orby opens a DM thread (`👀 Watching <repo> @ <branch>`)
+and replies to it whenever the session stops (`✅ PR ready`, `📋 Findings`,
+`📋 Done`), needs input (`⏸️`), or ends (`🏁`). Run `/unwatch` when you're back.
+
+One-way by design: the bot process does not need to be running — everything is
+posted by the hook script. Message quality is hybrid: Claude writes a one-line
+status sentinel (`~/.orby/status/<session_id>.json`) at natural stopping points;
+when absent, the hook falls back to a heuristic over Claude's last message.
+Requires `ORBY_NOTIFY_USER` (your Slack member ID) in `config.env`.
+
 ## Install
 
 ```bash
