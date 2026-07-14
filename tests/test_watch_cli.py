@@ -14,7 +14,15 @@ def _setup(monkeypatch, tmp_path, *, watched=False):
         "slack_bot_token": "xoxb-test",
         "notify_user": "U123",
     })
+    monkeypatch.setattr(watch, "CLAUDE_PROJECTS_DIR", tmp_path / "projects")  # hermetic: no real transcripts
     return tmp_path / "watch.json"
+
+
+def _write_transcript(tmp_path, sid, *titles):
+    proj = tmp_path / "projects" / "-home-user-somerepo"
+    proj.mkdir(parents=True, exist_ok=True)
+    lines = [f'{{"type":"custom-title","customTitle":"{t}","sessionId":"{sid}"}}' for t in titles]
+    (proj / f"{sid}.jsonl").write_text("\n".join(lines) + "\n")
 
 
 def test_enroll_creates_entry_and_posts_root(monkeypatch, tmp_path, capsys):
@@ -80,3 +88,42 @@ def test_enroll_without_session_id_exits(monkeypatch, tmp_path):
     monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
     with pytest.raises(SystemExit):
         watch.enroll(None)
+
+
+def test_session_title_last_rename_wins(monkeypatch, tmp_path):
+    monkeypatch.setattr(watch, "CLAUDE_PROJECTS_DIR", tmp_path / "projects")
+    _write_transcript(tmp_path, "sid-123456789", "old-name", "my-renamed-session")
+    assert watch._session_title("sid-123456789") == "my-renamed-session"
+
+
+def test_session_title_none_without_transcript(monkeypatch, tmp_path):
+    monkeypatch.setattr(watch, "CLAUDE_PROJECTS_DIR", tmp_path / "projects")
+    assert watch._session_title("sid-123456789") is None
+
+
+def test_enroll_uses_rename_name_when_no_label(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(watch, "slack_api", lambda m, p, t: {"ok": True, "channel": {"id": "D1"}})
+    monkeypatch.setattr(watch, "post_message", lambda t, c, text, thread_ts=None: (
+        calls.append(text) or {"ok": True, "ts": "9.9"}))
+    path = _setup(monkeypatch, tmp_path)
+    _write_transcript(tmp_path, "sid-123456789", "my-renamed-session")
+
+    watch.enroll(None)
+
+    assert "👀 Watching *my-renamed-session* — " in calls[0]
+    assert Watchlist(path).get("sid-123456789")["session_name"] == "my-renamed-session"
+
+
+def test_enroll_label_overrides_rename_name(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(watch, "slack_api", lambda m, p, t: {"ok": True, "channel": {"id": "D1"}})
+    monkeypatch.setattr(watch, "post_message", lambda t, c, text, thread_ts=None: (
+        calls.append(text) or {"ok": True, "ts": "9.9"}))
+    _setup(monkeypatch, tmp_path)
+    _write_transcript(tmp_path, "sid-123456789", "my-renamed-session")
+
+    watch.enroll("explicit-label")
+
+    assert "👀 Watching *explicit-label* — " in calls[0]
+    assert "my-renamed-session" not in calls[0]
