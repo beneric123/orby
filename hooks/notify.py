@@ -276,7 +276,7 @@ def main():
             entry = watchlist.get(push_sid)
         except Exception as e:
             _log(f"  watchlist error: {e}")
-            entry = None
+            entry = None  # watchlist unreadable → can't know if watched; fall through so attach mode keeps working
         if entry:
             try:
                 cfg = load_config()
