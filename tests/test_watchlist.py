@@ -55,5 +55,10 @@ def test_prunes_stale_entries(tmp_path):
 def test_atomic_write_no_tmp_left(tmp_path):
     wl = _wl(tmp_path)
     wl.set("sid-1", {})
-    assert not (tmp_path / "watch.tmp").exists()
+    assert not list(tmp_path.glob("*.tmp"))
     assert json.loads((tmp_path / "watch.json").read_text())
+
+
+def test_read_only_construction_does_not_write(tmp_path):
+    Watchlist(tmp_path / "watch.json")
+    assert not (tmp_path / "watch.json").exists()  # plain read never touches disk

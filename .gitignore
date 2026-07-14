@@ -6,5 +6,6 @@ sessions.json
 *.log
 .DS_Store
 watch.json
+*.tmp
 status/
 .pytest_cache/
