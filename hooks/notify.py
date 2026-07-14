@@ -26,6 +26,9 @@ sys.path.insert(0, str(ORBY_DIR))
 from config import load_config
 from core.session import SessionManager
 from formatter import format_tool_use
+from core.classify import classify_stop
+from core.slack import post_message
+from core.watchlist import Watchlist
 
 
 def _detect_tmux_session() -> str | None:
@@ -210,6 +213,45 @@ def _log(msg: str):
         pass
 
 
+def _extract_stop_text(hook_data: dict) -> str | None:
+    """Pull Claude's final message for a Stop event (hook field, then transcript)."""
+    last_msg = hook_data.get("last_assistant_message")
+    text = None
+    if last_msg:
+        if isinstance(last_msg, str):
+            text = last_msg
+        elif isinstance(last_msg, dict):
+            parts = [b.get("text", "") for b in last_msg.get("content", [])
+                     if isinstance(b, dict) and b.get("type") == "text"]
+            text = "".join(parts) if parts else str(last_msg)
+        else:
+            text = str(last_msg)
+    if not text:
+        text = _get_last_response(hook_data.get("transcript_path"))
+    return text
+
+
+def _handle_push(event: str, hook_data: dict, session_id: str,
+                 entry: dict, watchlist: Watchlist, bot_token: str):
+    """Push-mode notification for a watched session (one-way, thread-per-session)."""
+    if event == "Stop":
+        text = classify_stop(session_id, _extract_stop_text(hook_data))
+    elif event == "Notification":
+        msg = (hook_data.get("message") or "").strip()
+        text = "⏸️ *Needs input*" + (f" — {msg[:500]}" if msg else "")
+    elif event == "SessionEnd":
+        text = "🏁 Session ended"
+    else:
+        return  # watched sessions stay quiet during work (PreToolUse etc.)
+
+    resp = post_message(bot_token, entry["dm_channel"], text, thread_ts=entry["thread_ts"])
+    _log(f"  push[{event}]: {str(resp)[:200]}")
+    if event == "SessionEnd":
+        watchlist.remove(session_id)
+    else:
+        watchlist.touch(session_id)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--event", required=True)
@@ -225,6 +267,24 @@ def main():
 
     _log(f"  hook_data keys: {list(hook_data.keys())}")
     _log(f"  hook session_id: {hook_data.get('session_id', 'NONE')}")
+
+    # Push mode: session enrolled via watch.py (/watch) — takes priority over attach mode.
+    push_sid = hook_data.get("session_id")
+    if push_sid:
+        try:
+            watchlist = Watchlist()
+            entry = watchlist.get(push_sid)
+        except Exception as e:
+            _log(f"  watchlist error: {e}")
+            entry = None
+        if entry:
+            try:
+                cfg = load_config()
+                _handle_push(args.event, hook_data, push_sid, entry, watchlist,
+                             cfg["slack_bot_token"])
+            except Exception as e:
+                _log(f"  push error: {e}")
+            return
 
     mgr = SessionManager()
 
@@ -265,27 +325,7 @@ def main():
     text = None
 
     if args.event == "Stop":
-        # Use last_assistant_message directly from hook data (most reliable)
-        last_msg = hook_data.get("last_assistant_message")
-        if last_msg:
-            _log(f"  last_assistant_message type: {type(last_msg).__name__}, len: {len(str(last_msg))}")
-            # Can be a string or a structured object
-            if isinstance(last_msg, str):
-                text = last_msg
-            elif isinstance(last_msg, dict):
-                # Extract text from content blocks
-                parts = []
-                for block in last_msg.get("content", []):
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        parts.append(block.get("text", ""))
-                text = "".join(parts) if parts else str(last_msg)
-            else:
-                text = str(last_msg)
-        if not text:
-            # Fallback to transcript
-            transcript_path = hook_data.get("transcript_path")
-            response = _get_last_response(transcript_path)
-            text = response or "_Claude finished. Waiting for input._"
+        text = _extract_stop_text(hook_data) or "_Claude finished. Waiting for input._"
 
     elif args.event == "PreToolUse":
         tool = hook_data.get("tool_name", "?")
